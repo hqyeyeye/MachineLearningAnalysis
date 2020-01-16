@@ -1,0 +1,133 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jan 13 12:28:14 2020
+
+@author: huqio
+"""
+
+import pandas as pd
+from imblearn.combine import SMOTETomek,SMOTEENN
+from imblearn.under_sampling import NearMiss
+import numpy as np
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.wrappers.scikit_learn import KerasClassifier
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import train_test_split
+from imblearn.combine import SMOTETomek,SMOTEENN
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
+#from sklearn.datasets import make_classification
+
+np.random.seed(0)
+
+
+
+
+def create_network():
+    classifier = Sequential()
+
+    # Adding the input layer and the first hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu', input_dim = 10))
+    
+    # Adding the second hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu'))
+    
+    
+    # Adding the output layer
+    classifier.add(Dense(kernel_initializer="uniform", activation="sigmoid", units=1))
+    
+    # Compiling the ANN
+    classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+    
+    return classifier
+
+
+
+def NN_roc(x_train,y_train,x_test,y_test,batch_size, nb_epoch):
+    
+    classifier = Sequential()
+    classifier.add(Dense(activation="relu", input_dim=10, units=6, kernel_initializer="uniform"))
+
+    # Adding the second hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu'))
+    
+    # Adding the output layer
+    classifier.add(Dense(kernel_initializer="uniform", activation="sigmoid", units=1))
+    
+    # Compiling the ANN
+    classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+    # Fitting the ANN to the Training set
+    classifier.fit(x_train, y_train, batch_size, nb_epoch)
+    
+    
+    y_pred = classifier.predict(x_test)
+#    Y_pred = (Y_pred> threshold)
+#    cm = confusion_matrix(Y_test, Y_pred)
+#    plot ROC
+    fpr,tpr,_ = roc_curve(y_test, y_pred)
+    roc_auc = auc(fpr,tpr)
+    plt.figure()
+    lw = 2
+    plt.plot(fpr, tpr, color='darkorange',
+             lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xticks(fontsize=30)
+    plt.yticks(fontsize=30)
+    plt.xlabel('False Positive Rate',fontsize=30)
+    plt.ylabel('True Positive Rate',fontsize=30)
+    plt.title('Receiver operating characteristic', fontsize=30)
+    plt.legend(loc="lower right",fontsize=30)
+    plt.show()
+
+df = pd.read_csv('ML_data.csv')
+
+#divide the data set into two sets which has output 0 and the other one has output 1
+happen = df[df['CE'] ==1 ]
+Nohappen = df[df['CE'] ==0 ]
+
+
+happen_train = happen.sample(frac=0.8)
+happen_train_drop = happen_train.index
+happen_test = happen.drop(happen_train_drop)
+
+Nohappen_train = Nohappen.sample(frac=0.8)
+Nohappen_train_drop = Nohappen_train.index
+Nohappen_test = Nohappen.drop(Nohappen_train_drop)
+ 
+train_set = pd.concat([happen_train,Nohappen_train])
+test_set = pd.concat([happen_test,Nohappen_test])
+
+X_train = train_set.iloc[:, [6,8,9,10,11,13,14,15,16,21]].values
+Y_train = train_set.iloc[:, 23].values
+
+X_test = test_set.iloc[:, [6,8,9,10,11,13,14,15,16,21]].values
+Y_test = test_set.iloc[:, 23].values
+
+#feature scaling
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+
+#undersampling
+nm = NearMiss()
+X_undsam_train, Y_undsam_train = nm.fit_sample(X_train,Y_train)
+
+#X_undsam_test, Y_undsam_test = nm.fit_sample(X_test,Y_test)
+
+neural_network = KerasClassifier(build_fn=create_network, 
+                                 epochs=50, 
+                                 batch_size=256, 
+                                 verbose=0)
+#cross over
+score_over = cross_val_score(neural_network,X_undsam_train,Y_undsam_train, cv=5,n_jobs=-1)
+
+#train the whole training data and predict the test data, plot the ROC
+NN_roc(X_undsam_train, Y_undsam_train, X_test, Y_test, 64,50)
+
+
+
+
