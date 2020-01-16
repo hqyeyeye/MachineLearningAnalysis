@@ -1,0 +1,128 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Jan 13 12:23:21 2020
+
+@author: huqio
+"""
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from imblearn.combine import SMOTETomek,SMOTEENN
+from imblearn.under_sampling import NearMiss
+from keras.models import Sequential
+from keras.layers import Dense
+#from keras.models import Model
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from keras.wrappers.scikit_learn import KerasClassifier
+from sklearn.model_selection import cross_val_score,cross_val_predict
+
+
+def NN_roc(x_train,y_train,x_test,y_test,batch_size, nb_epoch):
+    
+    classifier = Sequential()
+    classifier.add(Dense(activation="relu", input_dim=10, units=6, kernel_initializer="uniform"))
+
+    # Adding the second hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu'))
+    
+    # Adding the output layer
+    classifier.add(Dense(kernel_initializer="uniform", activation="sigmoid", units=1))
+    
+    # Compiling the ANN
+    classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+    # Fitting the ANN to the Training set
+    classifier.fit(x_train, y_train, batch_size, nb_epoch)
+    
+    
+    y_pred = classifier.predict(x_test)
+#    Y_pred = (Y_pred> threshold)
+#    cm = confusion_matrix(Y_test, Y_pred)
+#    plot ROC
+    fpr,tpr,_ = roc_curve(y_test, y_pred)
+    roc_auc = auc(fpr,tpr)
+    plt.figure()
+    lw = 2
+    plt.plot(fpr, tpr, color='darkorange',
+             lw=lw, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xticks(fontsize=30)
+    plt.yticks(fontsize=30)
+    plt.xlabel('False Positive Rate',fontsize=30)
+    plt.ylabel('True Positive Rate',fontsize=30)
+    plt.title('Receiver operating characteristic', fontsize=30)
+    plt.legend(loc="lower right",fontsize=30)
+    plt.show()
+##    return cm
+def create_network():
+    classifier = Sequential()
+
+    # Adding the input layer and the first hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu', input_dim = 10))
+    
+    # Adding the second hidden layer
+    classifier.add(Dense(units = 6, kernel_initializer = 'uniform', activation = 'relu'))
+    
+    
+    # Adding the output layer
+    classifier.add(Dense(kernel_initializer="uniform", activation="sigmoid", units=1))
+    
+    # Compiling the ANN
+    classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+    
+    return classifier
+   
+#get the features and predictor
+df = pd.read_csv('prepare_data.csv')
+X = df.iloc[:,:10 ].values
+Y = df.iloc[:,10].values
+#undersampling used NearMiss 
+nm = NearMiss()
+X_undsam, Y_undsam = nm.fit_sample(X,Y)
+#split the data into training and testing data
+X_train, X_test, Y_train, Y_test = train_test_split(X_undsam, Y_undsam, test_size=0.2, random_state = 0)
+#feature scaling
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
+#cross validation
+neural_network = KerasClassifier(build_fn=create_network, 
+                                 epochs=128, 
+                                 batch_size=50, 
+                                 verbose=0)
+score_over_5 = cross_val_score(neural_network,X_train,Y_train, cv=5,n_jobs=-1)
+#run_whole trainning data and generate the roc   
+NN_roc(X_train,Y_train,X_test,Y_test,128,100)
+
+
+
+
+    
+
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
