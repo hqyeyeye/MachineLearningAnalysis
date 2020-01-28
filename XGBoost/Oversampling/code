@@ -1,0 +1,164 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jan  7 14:05:26 2020
+
+@author: huqio
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from imblearn.combine import SMOTETomek,SMOTEENN
+from imblearn.under_sampling import NearMiss
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_curve
+from sklearn.metrics import confusion_matrix,roc_auc_score
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold
+from sklearn.metrics import mean_squared_error
+from xgboost import XGBClassifier,plot_importance
+import xgboost
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
+from sklearn.model_selection import cross_val_score
+import shap
+
+df = pd.read_csv('Data_1.csv')
+df.info()
+df['CE'] = np.where(df['nCE'] == 0, 0, 1)
+
+#oversampling
+happen = df[df['CE'] ==1 ]
+Nohappen = df[df['CE'] ==0 ]
+
+happen_train = happen.sample(frac=0.8)
+happen_train_drop = happen_train.index
+happen_test = happen.drop(happen_train_drop)
+
+Nohappen_train = Nohappen.sample(frac=0.8)
+Nohappen_train_drop = Nohappen_train.index
+Nohappen_test = Nohappen.drop(Nohappen_train_drop)
+ 
+train_set = pd.concat([happen_train,Nohappen_train])
+test_set = pd.concat([happen_test,Nohappen_test])
+
+features = ['interval_time', 'speed_mean','speed_sd','distance','age','wind_speed','prep_inten','prep_prob', 'visibility','cumdrive']
+train_feature = train_set[features]
+test_feature = test_set[features]
+
+#X_train = train_set.iloc[:, [6,8,9,10,11,13,14,15,16,21]].values
+X_train = train_feature.values
+Y_train = train_set.iloc[:, 23].values
+
+#X_test = test_set.iloc[:, [6,8,9,10,11,13,14,15,16,21]].values
+X_test = test_feature.values
+Y_test = test_set.iloc[:, 23].values
+
+
+smk = SMOTETomek()
+X_oversam, Y_oversam = smk.fit_sample(X_train,Y_train)
+
+#nm = NearMiss()
+#X_undsam, Y_undsam = nm.fit_sample(X_train,Y_train) 
+
+
+
+xgb_class = XGBClassifier(max_depth=3, learning_rate=0.1, n_estimators=300,
+                          verbosity=1, scale_pos_weight=133, objective='binary:logistics', booster='gbtree', 
+                          tree_method='auto',n_jobs=-1, gamma=0, base_score=0.5, random_state=0, missing=None)
+#kfold = KFold(n_splits=5, random_state=7)
+data_dmatrix = xgboost.DMatrix(data=X_oversam,label=Y_oversam)
+data_test = xgboost.DMatrix(data=X_test,label=Y_test)
+
+params = {'max_depth':3,'learning_rate':0.1, 'n_estimators':300,
+                          'verbosity':1, 'scale_pos_weight':133, 'objective':'binary:logistics', 'booster':'gbtree', 
+                          'tree_method':'auto','n_jobs':-1, 'gamma':0, 'base_score':0.5, 'random_state':0, 'missing':None}
+
+cv_results = xgboost.cv(dtrain=data_dmatrix, params=params,nfold=5,num_boost_round=300,metrics="auc")
+print(cv_results)
+
+
+xgb_class.fit(X_oversam,Y_oversam,eval_set=[(X_oversam,Y_oversam),(X_test,Y_test)],eval_metric=['auc'])
+
+#feature importance
+xgboost.plot_importance(xgb_class, importance_type="cover")
+plt.title('Feature importance, type="cover"')
+plt.show()
+
+xgboost.plot_importance(xgb_class, importance_type="gain")
+plt.title('Feature importance, type="gain"')
+plt.show()
+
+xgboost.plot_importance(xgb_class, importance_type="weight")
+plt.title('Feature importance, type="weight"')
+plt.show()
+
+#explain the data based on the features
+
+explainer = shap.TreeExplainer(xgb_class)
+shap_values = explainer.shap_values(X_train)
+
+shap.summary_plot(shap_values, X_oversam,
+                  feature_names=['interval_time', 'speed_mean',
+                                 'speed_sd','distance','age','wind_speed',
+                                 'prep_inten','prep_prob', 'visibility','cumdrive'])
+
+y_predict = xgb_class.predict(X_test)
+
+predictions = [round(value) for value in y_predict]
+auc = roc_auc_score(Y_test,predictions)
+results = xgb_class.evals_result()
+epochs = len(results['validation_0']['auc'])
+
+plt.rcParams['font.size'] = 30
+x_axis = range(0, epochs)
+fig, ax = plt.subplots()
+ax.plot(x_axis, results['validation_0']['auc'], label='Train')
+ax.plot(x_axis, results['validation_1']['auc'], label='Test')
+ax.legend()
+plt.ylabel('AUC')
+plt.xlabel('Epoch')
+plt.title('XGBoost AUC')
+plt.show()
+
+cm = confusion_matrix(Y_test,y_predict)
+#    total = sum(sum(cm))
+#    accuracy=(cm[0,0]+cm[1,1])/total
+auc = roc_auc_score(Y_test,y_predict)
+#    print ('Accuracy : ', accuracy)
+print('ROC_AUC :',auc)
+
+sensitivity = cm[0,0]/(cm[0,0]+cm[0,1])
+print('Sensitivity : ', sensitivity)
+
+specificity = cm[1,1]/(cm[1,0]+cm[1,1])
+print('Specificity : ', specificity)
+    
+
+#k-fold cross validation
+
+#parameter_grid = {
+#        'min_child_weight': [1],
+#        'gamma': [0.1,0.2],
+#        'subsample': [0.6, 0.8],
+#        'colsample_bytree': [0.6, 0.8],
+#        'max_depth': [5]
+#        }
+## Fitting XGBoost to the Training set
+#xgb = XGBClassifier(learning_rate=0.02, n_estimators=600, objective='binary:logistic',
+#                    silent=True, nthread=1)
+#
+#
+#skf = StratifiedKFold(n_splits=5, shuffle = True, random_state = 1001)
+#
+#grid_search = GridSearchCV(xgb, param_grid=parameter_grid, scoring='roc_auc', n_jobs=-1 , cv=skf.split(X_oversam,Y_oversam), verbose=3)
+
+#grid_search.fit(X_oversam,Y_oversam)
+#print('Best paramters,', grid_search.best_params_)
+#print(grid_search.best_score_)
+
+
+
+
+
+
+
