@@ -1,0 +1,37 @@
+1. parameters: (max_depth=3, learning_rate=0.1, n_estimators=500,
+                          verbosity=1, scale_pos_weight=133, objective='binary:logistic', booster='gbtree', 
+                          tree_method='auto',n_jobs=-1, gamma=0, base_score=0.5, random_state=0, missing=None)
+train_data:
+after 500_run
+validation_0-auc:0.785481       validation_1-auc:0.72264
+
+test_data:
+ROC_AUC : 0.6503843134645365
+Sensitivity :  0.6285105624129438
+Specificity :  0.672258064516129
+
+cross_validation_score: 
+train-auc-mean	train-auc-std	        test-auc-mean	test-auc-std
+0.6218134	0.0025488962003188693	0.6171514	0.00403437353749005
+...(After 150 runs)
+train-auc-mean	train-auc-std	        test-auc-mean	test-auc-std
+0.7485108	0.0014953265061517652	0.7137004	0.0018916614496256945
+
+
+2. 2.Change the objective function of the XGBoost: the first run, we set the parameter concerning the objective function as 'binary:logistics'. (binary:logistic: logistic regression for binary classification, output probability). Here we applied 'binary: hinge' (hinge loss for binary classification. This makes predictions of 0 or 1, rather than producing probabilities.)
+parameters: (max_depth=3, learning_rate=0.1, n_estimators=300,
+                          verbosity=1, scale_pos_weight=133, objective='binary:hinge', booster='gbtree', 
+                          tree_method='auto',n_jobs=-1, gamma=0, base_score=0.5, random_state=0, missing=None)
+
+
+
+
+cross_validation_score(k=5): 
+train-auc-mean	train-auc-std	test-auc-mean	test-auc-std
+0.5002828	0.0001964671982800201	0.4999994	1.1999999999900977e-06
+
+The result is not good enough. I didn't try more. Try other parameters.
+
+
+
+
